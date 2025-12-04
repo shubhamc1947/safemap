@@ -1,16 +1,52 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/shubhamc1947/go-concurrent-kv/pkg/concurrentmap"
 )
 
-// KVServer holds the HTTP handlers and the underlying store.
+// JSON request/response format
+type KVRequest struct {
+	Value string `json:"value"`
+}
+
+type KVResponse struct {
+	Value string `json:"value"`
+}
+
+// Custom ResponseWriter to capture status code for logging
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (r *statusRecorder) WriteHeader(code int) {
+	r.status = code
+	r.ResponseWriter.WriteHeader(code)
+}
+
+// Logging middleware
+func loggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		start := time.Now()
+		rec := &statusRecorder{ResponseWriter: w, status: 200}
+
+		next.ServeHTTP(rec, r)
+
+		duration := time.Since(start)
+		log.Printf("%s %s => %d (%s)", r.Method, r.URL.Path, rec.status, duration)
+	})
+}
+
+// KV Server structure
 type KVServer struct {
 	store *concurrentmap.ConcurrentMap[string, []byte]
 }
@@ -18,28 +54,31 @@ type KVServer struct {
 func main() {
 	// CLI flags
 	port := flag.Int("port", 8080, "Port to listen on")
-	buckets := flag.Int("buckets", 64, "Number of shards/buckets for the concurrent map")
+	buckets := flag.Int("buckets", 64, "Number of shards/buckets")
 	flag.Parse()
 
 	store := concurrentmap.NewStringMap[[]byte](*buckets)
 	server := &KVServer{store: store}
 
+	// Router
 	mux := http.NewServeMux()
-	mux.HandleFunc("/kv/", server.handleKV)  // /kv/{key}
-	mux.HandleFunc("/healthz", handleHealth) // simple health check
+	mux.HandleFunc("/kv/", server.handleKV)
+	mux.HandleFunc("/healthz", handleHealth)
+
+	// Apply logging middleware
+	loggedMux := loggingMiddleware(mux)
 
 	addr := fmt.Sprintf(":%d", *port)
 	log.Printf("Starting KV server on %s with %d buckets\n", addr, *buckets)
 
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	if err := http.ListenAndServe(addr, loggedMux); err != nil {
 		log.Fatalf("server failed: %v", err)
 	}
 }
 
-// handleKV routes PUT/GET/DELETE for /kv/{key}
+// ----------- ROUTER -----------
+
 func (s *KVServer) handleKV(w http.ResponseWriter, r *http.Request) {
-	// path is /kv/{key}
-	// strip prefix "/kv/"
 	key := r.URL.Path[len("/kv/"):]
 	if key == "" {
 		http.Error(w, "missing key", http.StatusBadRequest)
@@ -48,9 +87,9 @@ func (s *KVServer) handleKV(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodPut:
-		s.handlePut(w, r, key)
+		s.handlePutJSON(w, r, key)
 	case http.MethodGet:
-		s.handleGet(w, r, key)
+		s.handleGetJSON(w, r, key)
 	case http.MethodDelete:
 		s.handleDelete(w, r, key)
 	default:
@@ -58,38 +97,54 @@ func (s *KVServer) handleKV(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *KVServer) handlePut(w http.ResponseWriter, r *http.Request, key string) {
+// ----------- PUT (JSON) -----------
+
+func (s *KVServer) handlePutJSON(w http.ResponseWriter, r *http.Request, key string) {
 	defer r.Body.Close()
-	value, err := io.ReadAll(r.Body)
+
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, "failed to read body", http.StatusBadRequest)
+		http.Error(w, "invalid body", http.StatusBadRequest)
 		return
 	}
 
-	s.store.Set(key, value)
+	// Try JSON first
+	var req KVRequest
+	if json.Unmarshal(body, &req) == nil && req.Value != "" {
+		s.store.Set(key, []byte(req.Value))
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(KVResponse{Value: req.Value})
+		return
+	}
+
+	// Fallback: raw body
+	s.store.Set(key, body)
 	w.WriteHeader(http.StatusCreated)
-	_, _ = w.Write([]byte("OK"))
+	json.NewEncoder(w).Encode(KVResponse{Value: string(body)})
 }
 
-func (s *KVServer) handleGet(w http.ResponseWriter, r *http.Request, key string) {
+// ----------- GET (JSON) -----------
+
+func (s *KVServer) handleGetJSON(w http.ResponseWriter, r *http.Request, key string) {
 	value, ok := s.store.Get(key)
 	if !ok {
 		http.Error(w, "key not found", http.StatusNotFound)
 		return
 	}
 
-	// Return raw bytes as response body
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(value)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(KVResponse{Value: string(value)})
 }
+
+// ----------- DELETE -----------
 
 func (s *KVServer) handleDelete(w http.ResponseWriter, r *http.Request, key string) {
 	s.store.Delete(key)
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// health endpoint: /healthz
+// ----------- HEALTH -----------
+
 func handleHealth(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("ok"))
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
