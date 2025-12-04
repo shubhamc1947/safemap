@@ -110,3 +110,18 @@ func fnv64a(s string) uint64 {
 	}
 	return hash
 }
+
+func (cm *ConcurrentMap[K, V]) LoadOrStore(k K, v V) (actual V, loaded bool) {
+	idx := cm.bucketIndexForKey(k)
+	b := &cm.buckets[idx]
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if existing, ok := b.m[k]; ok {
+		return existing, true
+	}
+
+	b.m[k] = v
+	return v, false
+}
