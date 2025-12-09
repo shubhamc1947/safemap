@@ -12,7 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/shubhamc1947/go-concurrent-kv/pkg/concurrentmap"
+	"github.com/shubhamc1947/safemap/pkg/concurrentmap"
 )
 
 // ----------- Stored Value with TTL -----------

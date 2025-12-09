@@ -1,3 +1,3 @@
-module github.com/shubhamc1947/go-concurrent-kv
+module github.com/shubhamc1947/safemap
 
 go 1.23.3
