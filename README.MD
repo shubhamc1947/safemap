@@ -229,21 +229,13 @@ Failed:           0
 🚀 Requests/Sec:  4306.64
 -------------------------------
 ---
-
----
-## 🎥 Benchmark Testing Video
+## Benchmark Testing Video
 
 Here’s a **live screen recording** of the benchmark test in action:
 
-👉 **Watch Video:**
-**[https://drive.google.com/file/d/1vAYYaWCKmustTKAU6_nF2mpaMzIwZ-8w/view?usp=sharing](https://drive.google.com/file/d/1vAYYaWCKmustTKAU6_nF2mpaMzIwZ-8w/view?usp=sharing)**
+ **Watch Video:**
+https://drive.google.com/file/d/1vAYYaWCKmustTKAU6_nF2mpaMzIwZ-8w/view?usp=sharing
 
-You can embed it using HTML if GitHub rendering allows:
-
-```html
-<a href="https://drive.google.com/file/d/1vAYYaWCKmustTKAU6_nF2mpaMzIwZ-8w/view?usp=sharing" target="_blank">
-  Benchmark Demo Video
-</a>
 ```
 
 This includes:
