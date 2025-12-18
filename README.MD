@@ -1,10 +1,5 @@
 # Go Concurrent Key-Value Store
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/shubhamc1947/safemap/main/issue.png" width="100%" />
-</p>
-
-
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 A high-performance, thread-safe, in-memory Key-Value store written in Go, featuring:
